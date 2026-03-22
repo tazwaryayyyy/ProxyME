@@ -94,7 +94,7 @@ Proxy Me sits as a floating overlay beside your meeting window. It listens to wh
 ## Setup
 
 ```bash
-git clone https://github.com/tazwaryayyyy/proxyme
+git clone https://github.com/tazwaryayyyy/ProxyME
 cd proxyme
 pip install -r requirements.txt
 cp .env.example .env
