@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Me — Meeting Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --accent: #7c6af7;
+    --accent2: #a594f9;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --glow: rgba(124,106,247,0.1);
+  }
+
+  html, body {
+    background: var(--bg);
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 500px; height: 400px;
+    background: radial-gradient(ellipse, rgba(124,106,247,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 52px 24px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .page-header {
+    margin-bottom: 48px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .wordmark {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--accent2);
+    letter-spacing: 0.15em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wordmark::before { content:''; width:20px; height:1px; background:var(--accent); }
+
+  h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .session-meta {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .btn-export {
+    background: var(--glow);
+    border: 1px solid rgba(124,106,247,0.3);
+    border-radius: 10px;
+    padding: 10px 18px;
+    color: var(--accent2);
+    font-size: 13px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-export:hover { background: rgba(124,106,247,0.18); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-number {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .stat-number.green { color: var(--green); }
+  .stat-number.purple { color: var(--accent2); }
+  .stat-number.amber { color: var(--amber); }
+  .stat-number.red { color: var(--red); }
+
+  .stat-label {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* Section */
+  .section { margin-bottom: 32px; }
+
+  .section-label {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* AI Summary box */
+  .summary-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .summary-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+
+  .summary-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+
+  .loading-dots span {
+    display: inline-block;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: ldot 1.2s ease-in-out infinite;
+    margin: 0 2px;
+  }
+  .loading-dots span:nth-child(2){animation-delay:.2s}
+  .loading-dots span:nth-child(3){animation-delay:.4s}
+  @keyframes ldot { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  #summary-text {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  /* Decision trail table */
+  .trail-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .trail-table th {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border2);
+    font-weight: 500;
+  }
+
+  .trail-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    vertical-align: middle;
+  }
+
+  .trail-table tr:last-child td { border-bottom: none; }
+  .trail-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .trail-table .td-time {
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .trail-table .td-text {
+    color: var(--text);
+    max-width: 300px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .status-badge.approve { background: rgba(52,211,153,0.1); color:var(--green); border:1px solid rgba(52,211,153,0.25); }
+  .status-badge.deny { background: rgba(248,113,113,0.1); color:var(--red); border:1px solid rgba(248,113,113,0.25); }
+  .status-badge.use { background: rgba(124,106,247,0.1); color:var(--accent2); border:1px solid rgba(124,106,247,0.25); }
+  .status-badge.timeout { background: rgba(251,191,36,0.1); color:var(--amber); border:1px solid rgba(251,191,36,0.25); }
+
+  .topic-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* Topics breakdown */
+  .topics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .topic-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .topic-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    text-transform: capitalize;
+  }
+
+  .topic-card-bar {
+    height: 3px;
+    background: var(--border2);
+    border-radius: 2px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .topic-card-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  .topic-card-count {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    border: 1px dashed var(--border2);
+    border-radius: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="page-header">
+    <div>
+      <div class="wordmark">PROXY ME</div>
+      <h1>Meeting Summary</h1>
+      <div class="session-meta" id="session-meta">Loading session data...</div>
+    </div>
+    <button class="btn-export" onclick="exportSummary()">Export PDF</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-number green" id="stat-suggestions">0</div>
+      <div class="stat-label">SUGGESTIONS USED</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number purple" id="stat-approved">0</div>
+      <div class="stat-label">APPROVALS GRANTED</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number red" id="stat-denied">0</div>
+      <div class="stat-label">HANDLED MANUALLY</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number amber" id="stat-topics">0</div>
+      <div class="stat-label">TOPICS DETECTED</div>
+    </div>
+  </div>
+
+  <!-- AI Summary -->
+  <div class="section">
+    <div class="section-label">AI-generated summary</div>
+    <div class="summary-box">
+      <div class="summary-loading" id="summary-loading">
+        <span>Generating summary</span>
+        <span class="loading-dots">
+          <span></span><span></span><span></span>
+        </span>
+      </div>
+      <div id="summary-text" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Topics breakdown -->
+  <div class="section">
+    <div class="section-label">topics detected</div>
+    <div class="topics-grid" id="topics-grid">
+      <div class="empty-state">No topics recorded yet</div>
+    </div>
+  </div>
+
+  <!-- Decision trail -->
+  <div class="section">
+    <div class="section-label">full decision trail</div>
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;">
+      <table class="trail-table" id="trail-table">
+        <thead>
+          <tr>
+            <th>TIME</th>
+            <th>ACTION</th>
+            <th>TOPIC</th>
+            <th>DETAIL</th>
+          </tr>
+        </thead>
+        <tbody id="trail-body">
+          <tr><td colspan="4" style="text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;padding:20px">No decisions recorded</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SESSION_ID = new URLSearchParams(location.search).get('session') || '';
+const log = JSON.parse(sessionStorage.getItem('proxyme_log') || '[]');
+
+function init() {
+  // Session meta
+  document.getElementById('session-meta').textContent =
+    `Session ${SESSION_ID} · ${new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
+
+  // Stats
+  const used = log.filter(l => l.type === 'use').length;
+  const approved = log.filter(l => l.type === 'approve').length;
+  const denied = log.filter(l => l.type === 'deny').length;
+  const topicSet = new Set(log.map(l => l.topic).filter(t => t && t !== '—'));
+
+  document.getElementById('stat-suggestions').textContent = used;
+  document.getElementById('stat-approved').textContent = approved;
+  document.getElementById('stat-denied').textContent = denied;
+  document.getElementById('stat-topics').textContent = topicSet.size;
+
+  // Topics grid
+  if (topicSet.size > 0) {
+    const topicCounts = {};
+    log.forEach(l => {
+      if (l.topic && l.topic !== '—') {
+        topicCounts[l.topic] = (topicCounts[l.topic] || 0) + 1;
+      }
+    });
+    const maxCount = Math.max(...Object.values(topicCounts));
+    const grid = document.getElementById('topics-grid');
+    grid.innerHTML = Object.entries(topicCounts).map(([topic, count]) => `
+      <div class="topic-card">
+        <div class="topic-card-name">${topic}</div>
+        <div class="topic-card-bar">
+          <div class="topic-card-fill" style="width:${Math.round(count/maxCount*100)}%"></div>
+        </div>
+        <div class="topic-card-count">${count} mention${count!==1?'s':''}</div>
+      </div>
+    `).join('');
+  }
+
+  // Decision trail
+  if (log.length > 0) {
+    const tbody = document.getElementById('trail-body');
+    tbody.innerHTML = log.map(entry => `
+      <tr>
+        <td class="td-time">${entry.time || '—'}</td>
+        <td><span class="status-badge ${entry.type}">${entry.type}</span></td>
+        <td><span class="topic-pill">${entry.topic || '—'}</span></td>
+        <td class="td-text">${entry.text || '—'}</td>
+      </tr>
+    `).reverse().join('');
+  }
+
+  // Generate AI summary
+  generateSummary();
+}
+
+async function generateSummary() {
+  if (log.length === 0) {
+    document.getElementById('summary-loading').style.display = 'none';
+    document.getElementById('summary-text').style.display = 'block';
+    document.getElementById('summary-text').textContent = 'No meeting data recorded. Start a session and use Proxy Me during a call to see your summary here.';
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/session/${SESSION_ID}/summary`, { method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ log })
+    });
+    const data = await res.json();
+    document.getElementById('summary-loading').style.display = 'none';
+    document.getElementById('summary-text').style.display = 'block';
+    document.getElementById('summary-text').textContent = data.summary || 'Summary unavailable.';
+  } catch {
+    document.getElementById('summary-loading').style.display = 'none';
+    document.getElementById('summary-text').style.display = 'block';
+    const used = log.filter(l=>l.type==='use').length;
+    const approved = log.filter(l=>l.type==='approve').length;
+    const denied = log.filter(l=>l.type==='deny').length;
+    const topics = [...new Set(log.map(l=>l.topic).filter(t=>t&&t!=='—'))];
+    document.getElementById('summary-text').textContent =
+      `Meeting completed.\n\n• ${used} AI suggestion${used!==1?'s':''} were used\n• ${approved} out-of-scope response${approved!==1?'s':''} were approved\n• ${denied} topic${denied!==1?'s':''} handled manually\n• Topics covered: ${topics.join(', ') || 'general conversation'}\n\nAll decisions were logged with full authorization context via Auth0 Token Vault.`;
+  }
+}
+
+function exportSummary() {
+  window.print();
+}
+
+init();
+</script>
+</body>
+</html>
