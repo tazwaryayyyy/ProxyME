@@ -143,7 +143,7 @@ proxyme/
 Every session generates a public audit URL:
 
 ```
-https://your-app.railway.app/audit/<session_id>
+https://web-production-cc743.up.railway.app/audit/<session_id>
 ```
 
 Shows every decision: topic detected, FGA layer, confidence, token scope, approval status, timestamp.
