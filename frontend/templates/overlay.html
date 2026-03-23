@@ -73,6 +73,26 @@
   }
   #end-btn:hover { border-color:var(--red); color:var(--red); }
 
+  /* Ticker */
+  #flow-ticker {
+    background: rgba(20,20,30,0.8);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--accent2);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    backdrop-filter: var(--blur);
+    transition: all 0.3s;
+    margin-bottom: 8px;
+  }
+  #flow-ticker.hidden { display: none; }
+  .ticker-item { animation: slideInTicker 0.2s ease-out; }
+  @keyframes slideInTicker { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+
   /* Transcript */
   #transcript-box {
     background:var(--surface); border:1px solid var(--border); border-radius:11px;
@@ -219,6 +239,7 @@
   </div>
 
   <div id="transcript-box">Waiting for audio...</div>
+  <div id="flow-ticker" class="hidden"></div>
   <div id="cards"></div>
   <div id="history"></div>
 </div>
@@ -228,6 +249,23 @@ const SESSION_ID = new URLSearchParams(location.search).get('session') || 'demo'
 let ws = null, isListening = false, recognition = null;
 const decisionLog = [];
 const cibaTimers = {};
+let tickerTimeout = null;
+
+function addTicker(text) {
+  const ticker = document.getElementById('flow-ticker');
+  ticker.classList.remove('hidden');
+  const item = document.createElement('div');
+  item.className = 'ticker-item';
+  item.textContent = text;
+  ticker.appendChild(item);
+  while(ticker.children.length > 3) ticker.firstChild.remove();
+  
+  clearTimeout(tickerTimeout);
+  tickerTimeout = setTimeout(() => {
+    ticker.innerHTML = '';
+    ticker.classList.add('hidden');
+  }, 4000);
+}
 
 window.addEventListener('load', () => {
   if (SESSION_ID && SESSION_ID !== 'demo') {
@@ -270,7 +308,8 @@ function connectWS() {
 }
 
 function handleMessage(msg) {
-  if (msg.type==='suggestion') { setStatus('listening','PROXY ME — suggestion ready'); showSuggestion(msg); }
+  if (msg.type === 'flow_ticker') { addTicker(msg.message); }
+  else if (msg.type==='suggestion') { setStatus('listening','PROXY ME — suggestion ready'); showSuggestion(msg); }
   else if (msg.type==='approval_required') { setStatus('approval','PROXY ME — approval needed'); showApproval(msg); }
   else if (msg.type==='denied') { 
       addHistory({type:'deny',text:msg.message || 'Handled manually',topic:'—',time:now()}); 

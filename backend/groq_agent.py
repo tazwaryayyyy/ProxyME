@@ -5,12 +5,18 @@ client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 class GroqAgent:
-    async def generate_response(self, transcript, config, matched_rule):
+    async def generate_response(self, transcript, config, matched_rule, history=None):
         user_name = config.get("name", "the user")
         role = config.get("role", "professional")
         context = config.get("context", "a business meeting")
         tone = config.get("tone", "professional and concise")
         rule_note = f"\nApproved topic: {matched_rule}" if matched_rule else ""
+        
+        history_prompt = ""
+        if history and len(history) > 1:
+            recent_context = "\n".join(history[-6:-1]) # up to 5 previous chunks
+            if recent_context.strip():
+                history_prompt = f"\n\nRecent conversation context:\n{recent_context}"
 
         try:
             response = await client.chat.completions.create(
@@ -21,7 +27,7 @@ class GroqAgent:
                         "role": "system",
                         "content": f"""You are an AI meeting assistant speaking on behalf of {user_name}, a {role}.
 Context: {context}
-Tone: {tone}{rule_note}
+Tone: {tone}{rule_note}{history_prompt}
 Generate a SHORT natural spoken response (1-3 sentences max).
 Sound human and natural, not robotic. Be direct and confident.
 Do NOT add disclaimers or explain that you are an AI.

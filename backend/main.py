@@ -186,11 +186,17 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
     if session_id not in active_sessions:
         return
     try:
+        async with active_sessions[session_id]["ws_lock"]:
+            await websocket.send_json({"type": "flow_ticker", "message": "[Token Vault] Fetching read:transcripts..."})
+
         # Fetch a per-action scoped token from Token Vault for classification
         classify_token = await auth0_client.get_scoped_token(
             action="classify_transcript",
             scope="read:transcripts"
         )
+
+        async with active_sessions[session_id]["ws_lock"]:
+            await websocket.send_json({"type": "flow_ticker", "message": "[Permission Engine] Checking FGA / Rules..."})
 
         check = await permission_engine.check(session_id, transcript, auth0_client)
 
@@ -209,16 +215,24 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
         }
 
         if check["allowed"]:
+            async with active_sessions[session_id]["ws_lock"]:
+                await websocket.send_json({"type": "flow_ticker", "message": f"[FGA Check] Allowed ({check.get('layer')})"})
+                await websocket.send_json({"type": "flow_ticker", "message": "[Token Vault] Fetching write:suggestions..."})
+
             # Fetch per-action token for response generation
             gen_token = await auth0_client.get_scoped_token(
                 action="generate_response",
                 scope="write:suggestions"
             )
 
+            async with active_sessions[session_id]["ws_lock"]:
+                await websocket.send_json({"type": "flow_ticker", "message": "[Groq AI] Generating response..."})
+
             response = await groq_agent.generate_response(
                 transcript,
                 active_sessions[session_id].get("config", {}),
-                check.get("matched_rule")
+                check.get("matched_rule"),
+                active_sessions[session_id]["transcript"]
             )
 
             audit_event.update({"response_generated": True, "gen_token_scope": gen_token.get("scope")})
@@ -238,14 +252,22 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
             })
 
         else:
+            async with active_sessions[session_id]["ws_lock"]:
+                await websocket.send_json({"type": "flow_ticker", "message": f"[FGA Check] Denied ({check.get('layer')})"})
+                await websocket.send_json({"type": "flow_ticker", "message": "[Groq AI] Generating preview..."})
+
             approval_id = os.urandom(6).hex()
             pending_approvals[approval_id] = asyncio.Event()
 
             preview = await groq_agent.generate_response(
                 transcript,
                 active_sessions[session_id].get("config", {}),
-                None
+                None,
+                active_sessions[session_id]["transcript"]
             )
+
+            async with active_sessions[session_id]["ws_lock"]:
+                await websocket.send_json({"type": "flow_ticker", "message": "[CIBA] Initiating Step-up Auth (RAR)..."})
 
             # Initiate CIBA with RAR
             ciba_result = await auth0_client.initiate_ciba_with_rar(
