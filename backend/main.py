@@ -271,7 +271,7 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
 
             # Initiate CIBA with RAR
             ciba_result = await auth0_client.initiate_ciba_with_rar(
-                user_id=active_sessions[session_id].get("config", {}).get("user_id", "demo_user"),
+                user_id=os.getenv("AUTH0_USER_ID", active_sessions[session_id].get("config", {}).get("user_id", "demo_user")),
                 topic=check.get("topic", "sensitive"),
                 proposed_response=preview,
                 binding_message=f"ProxyMe approval needed"
