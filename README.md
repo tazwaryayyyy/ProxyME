@@ -69,6 +69,8 @@ Proxy Me sits as a floating overlay beside your meeting window. It listens to wh
 - **Fires a CIBA step-up request** for anything outside scope — with RAR so you see exactly what the AI wants to say before approving
 - **Logs every decision** to a shareable audit trail at `/audit/<session_id>`
 - **Never reuses tokens** — each action gets its own minimal-scope Token Vault token
+- **Remembers context** — keeps a sliding window of the last 5 transcript chunks so responses stay coherent across a long meeting
+- **Shows its work** — a real-time flow ticker in the overlay displays every Auth0 API call as it happens: Token Vault fetches, FGA checks, CIBA initiations
 
 ---
 
@@ -80,6 +82,7 @@ Proxy Me sits as a floating overlay beside your meeting window. It listens to wh
 | **CIBA** | Step-up approval for out-of-scope topics. `POST /bc-authorize` + Guardian push polling. |
 | **RAR** | `authorization_details` in CIBA payload carries the proposed response text — Guardian notification shows exactly what's being approved. |
 | **FGA** | Role-based topic permissions. Sales Engineer auto-approves pricing + technical. Junior AE approves general only. Executive approves everything. |
+| **Flow Ticker** | Every Token Vault fetch, FGA check, and CIBA initiation is streamed to the overlay in real time so the authorization layer is visible during a live session. |
 
 ---
 
@@ -113,6 +116,7 @@ AUTH0_DOMAIN=dev-xxxx.us.auth0.com
 AUTH0_CLIENT_ID=your_client_id
 AUTH0_CLIENT_SECRET=your_client_secret
 AUTH0_AUDIENCE=https://dev-xxxx.us.auth0.com/api/v2/
+AUTH0_USER_ID=auth0|your_user_id_here
 ```
 
 ---
