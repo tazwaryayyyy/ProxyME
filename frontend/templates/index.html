@@ -374,6 +374,13 @@
   #category-section {
     transition: opacity 0.3s ease;
   }
+  
+  @media (max-width: 768px) {
+    .container { padding: 40px 20px 80px; }
+    .role-grid { grid-template-columns: 1fr; }
+    .categories { grid-template-columns: 1fr; }
+    h1 { font-size: clamp(36px, 10vw, 48px); }
+  }
 </style>
 </head>
 <body>

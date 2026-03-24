@@ -9,20 +9,20 @@
 <style>
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root {
-    --surface: rgba(10,10,12,0.65);
-    --surface2: rgba(20,20,25,0.75);
-    --border: #111111;
-    --border2: rgba(255,255,255,0.05);
+    --surface: rgba(10,10,15,0.85);
+    --surface2: rgba(20,20,25,0.95);
+    --border: #1A1A1A;
+    --border2: rgba(255,255,255,0.08);
     --text: #ffffff; --muted: #FFFFFF99;
     --accent: #8B5CF6; --accent2: #a594f9;
-    --green: #34d399; --amber: #8B5CF6; --red: #f87171;
+    --green: #34d399; --amber: #8B5CF6; --red: #ef4444;
     --glow: rgba(139,92,246,0.25);
-    --blur: blur(30px) saturate(140%);
+    --blur: blur(20px);
   }
   html,body { background:transparent; font-family:'Geist Sans',sans-serif; color:var(--text); font-weight:300; height:100%; overflow:hidden; }
 
   #overlay {
-    position:fixed; right:24px; top:24px; width:380px;
+    position:fixed; right:24px; top:24px; width:calc(100vw - 48px); max-width:380px;
     max-height:calc(100vh - 48px); display:flex; flex-direction:column;
     gap:12px; z-index:9999; overflow-y:auto; scrollbar-width:none; padding:16px;
     background: var(--surface);
@@ -33,12 +33,8 @@
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
   #overlay.needs-approval {
-    border-color: rgba(251,191,36,0.3);
-    animation: amberContainerPulse 2s infinite;
-  }
-  @keyframes amberContainerPulse {
-    0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 24px 64px rgba(0,0,0,0.6), inset 0 0 20px rgba(251,191,36,0.05), 0 0 30px rgba(251,191,36,0.1); }
-    50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 64px rgba(0,0,0,0.7), inset 0 0 40px rgba(251,191,36,0.15), 0 0 60px rgba(251,191,36,0.25); }
+    border-color: rgba(239,68,68,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 24px 64px rgba(0,0,0,0.6), inset 0 0 20px rgba(239,68,68,0.05), 0 0 30px rgba(239,68,68,0.1);
   }
 
 
@@ -60,18 +56,11 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.01);
   }
   #status-dot { width:10px; height:10px; border-radius:50%; background:var(--muted); transition:all 0.4s; flex-shrink:0; }
-  #status-dot.listening { background:var(--green); box-shadow:0 0 12px rgba(52,211,153,0.5); animation:pulse 2s infinite; }
+  #status-dot.listening { background:var(--green); box-shadow:0 0 12px rgba(52,211,153,0.4); animation:pulse 2s infinite; }
   #status-dot.processing { background:var(--accent); box-shadow:0 0 12px var(--accent-glow); }
-  #status-dot.approval { background:var(--amber); box-shadow:0 0 12px rgba(251,191,36,0.6); animation:heartbeatPulse 1.2s infinite; }
+  #status-dot.approval { background:var(--red); box-shadow:0 0 12px rgba(239,68,68,0.6); }
   
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-  @keyframes heartbeatPulse {
-    0% { transform: scale(1); opacity: 1; }
-    15% { transform: scale(1.2); opacity: 0.9; }
-    30% { transform: scale(1); opacity: 1; }
-    45% { transform: scale(1.2); opacity: 0.9; }
-    60%, 100% { transform: scale(1); opacity: 1; }
-  }
 
   #status-text { font-size:12px; font-family:'Geist Mono',monospace; color:var(--muted); flex:1; letter-spacing:0.04em; text-transform: lowercase; transition: color 0.3s; }
 
@@ -156,7 +145,7 @@
   }
   .card-label.green { color:var(--green); text-shadow: 0 0 10px rgba(52,211,153,0.3); }
   .card-label.purple { color:var(--accent); }
-  .card-label.amber-pulse { color:var(--amber); animation:heartbeatPulse 1.5s infinite; text-shadow: 0 0 12px rgba(251,191,36,0.4); }
+  .card-label.red-warn { color:var(--red); text-shadow: 0 0 12px rgba(239,68,68,0.4); }
   .card-label.purple-pulse { color:var(--accent); animation:pulse 1s infinite; text-shadow: 0 0 10px var(--accent-glow); }
   .card-label::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
 
@@ -231,19 +220,11 @@
 
   /* Approval specific buttons */
   .approval-card .btn-approve {
-    background: var(--amber); border-color: rgba(251,191,36,0.5); color: #000;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 24px rgba(251,191,36,0.4);
-    animation: amberActionPulse 2s infinite;
+    background: var(--red); border-color: rgba(239,68,68,0.5); color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 16px rgba(239,68,68,0.4);
   }
   .approval-card .btn-approve:hover {
-    background: #fcd34d; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 0 40px rgba(251,191,36,0.7); animation: none; transform:translateY(-1px);
-  }
-  @keyframes amberActionPulse {
-    0%, 100% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 24px rgba(251,191,36,0.4); }
-    15% { transform: scale(1.02); box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 0 40px rgba(251,191,36,0.7); }
-    30% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 24px rgba(251,191,36,0.4); }
-    45% { transform: scale(1.02); box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 0 40px rgba(251,191,36,0.7); }
-    60% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 24px rgba(251,191,36,0.4); }
+    background: #dc2626; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 24px rgba(239,68,68,0.6); transform:translateY(-1px);
   }
 
   .approval-card .btn-deny {
@@ -431,7 +412,7 @@ function showApproval(msg) {
   const safePrev = (msg.suggested_response||'').replace(/`/g,'\\`');
   const reasonText = (msg.reason||'potential commitment detected').toLowerCase();
   card.innerHTML = `
-    <div class="card-label amber-pulse">approval required · ${msg.topic||'sensitive'}</div>
+    <div class="card-label red-warn">approval required · ${msg.topic||'sensitive'}</div>
     <div class="card-reason">${reasonText}</div>
     <div class="card-question">"${msg.question||''}"</div>
     <div class="card-preview">${msg.suggested_response||''}</div>
