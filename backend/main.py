@@ -231,12 +231,12 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
     try:
         await safe_send(websocket, ws_lock, {
             "type": "flow_ticker",
-            "message": "[Token Vault] Fetching read:transcripts..."
+            "message": "[Token Vault] Fetching read:users..."
         })
 
         classify_token = await auth0_client.get_scoped_token(
             action="classify_transcript",
-            scope="read:transcripts"
+            scope="read:users"
         )
 
         await safe_send(websocket, ws_lock, {
@@ -266,12 +266,12 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
             })
             await safe_send(websocket, ws_lock, {
                 "type": "flow_ticker",
-                "message": "[Token Vault] Fetching write:suggestions..."
+                "message": "[Token Vault] Fetching update:users..."
             })
 
             gen_token = await auth0_client.get_scoped_token(
                 action="generate_response",
-                scope="write:suggestions"
+                scope="update:users"
             )
 
             await safe_send(websocket, ws_lock, {

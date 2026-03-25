@@ -159,6 +159,7 @@ class Auth0Client:
                         "client_secret": self.client_secret,
                         "login_hint": login_hint,
                         "scope": "openid",
+                        "audience": self.audience,
                         "binding_message": short_binding,
                         "authorization_details": authorization_details,
                     },
