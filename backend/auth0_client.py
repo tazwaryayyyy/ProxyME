@@ -123,7 +123,14 @@ class Auth0Client:
         CIBA standard flow without Rich Authorization Requests (RAR).
         Context is passed via binding_message.
         """
-        display_message = f"ProxyMe: Approve '{topic}'? | Msg: {proposed_response[:50]}..."
+        # Auth0 strictly limits binding_message to 64 characters
+        prefix = f"ProxyMe:'{topic[:10]}'? "
+        remaining_len = 64 - len(prefix) - 3  # reserve 3 for '...'
+        if len(proposed_response) > remaining_len:
+            display_message = f"{prefix}{proposed_response[:remaining_len]}..."
+        else:
+            display_message = (prefix + proposed_response)[:64]
+
         
         if not self.domain or not self.client_id:
             return {
