@@ -1,6 +1,7 @@
 import os
 import httpx
 import json
+import re
 from typing import Optional
 
 
@@ -123,13 +124,17 @@ class Auth0Client:
         CIBA standard flow without Rich Authorization Requests (RAR).
         Context is passed via binding_message.
         """
-        # Auth0 strictly limits binding_message to 64 characters
-        prefix = f"ProxyMe:'{topic[:10]}'? "
+        # Auth0 strictly limits binding_message to 64 chars and specific symbols (+-_.,:#)
+        clean_topic = re.sub(r'[^a-zA-Z0-9\s\+\-\_\.\,\:\#]', '', topic)
+        clean_response = re.sub(r'[^a-zA-Z0-9\s\+\-\_\.\,\:\#]', '', proposed_response)
+
+        prefix = f"ProxyMe: {clean_topic[:10]} - "
         remaining_len = 64 - len(prefix) - 3  # reserve 3 for '...'
-        if len(proposed_response) > remaining_len:
-            display_message = f"{prefix}{proposed_response[:remaining_len]}..."
+        
+        if len(clean_response) > remaining_len:
+            display_message = f"{prefix}{clean_response[:remaining_len]}..."
         else:
-            display_message = (prefix + proposed_response)[:64]
+            display_message = (prefix + clean_response)[:64]
 
         
         if not self.domain or not self.client_id:
