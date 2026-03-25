@@ -324,7 +324,7 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
 
             await safe_send(websocket, ws_lock, {
                 "type": "flow_ticker",
-                "message": "[CIBA] Initiating Step-up Auth (RAR)..."
+                "message": "[CIBA] Initiating Step-up Auth..."
             })
 
             # Use AUTH0_USER_EMAIL env var — must be the enrolled Guardian user's email
@@ -333,17 +333,23 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
                 active_sessions[session_id].get("config", {}).get("user_email", "")
             )
 
-            ciba_result = await auth0_client.initiate_ciba_with_rar(
-                user_id=os.getenv("AUTH0_USER_ID", "demo_user"),
+            user_id = os.getenv("AUTH0_USER_ID", "demo_user")
+            login_hint = json.dumps({
+                "format": "iss_sub",
+                "iss": f"https://{auth0_client.domain}/",
+                "sub": user_id
+            })
+
+            ciba_result = await auth0_client.initiate_ciba_standard(
+                login_hint=login_hint,
                 topic=check.get("topic", "sensitive"),
-                proposed_response=preview,
-                binding_message=f"ProxyMe approval needed"
+                proposed_response=preview
             )
 
             audit_event.update({
                 "ciba_initiated": True,
                 "ciba_demo_mode": ciba_result.get("demo_mode", True),
-                "rar_topic": ciba_result.get("rar_details", {}).get("topic"),
+                "rar_topic": check.get("topic", "sensitive"), # Fallback since RAR is removed
                 "approval_id": approval_id,
             })
             audit_logs[session_id].append(audit_event)
@@ -359,7 +365,7 @@ async def process_transcript(websocket: WebSocket, session_id: str, transcript: 
                 "fga_label": check.get("fga_label"),
                 "layer": check.get("layer"),
                 "ciba_mode": "guardian" if not ciba_result.get("demo_mode") else "overlay",
-                "rar_details": ciba_result.get("rar_details", {}),
+                "rar_details": {}, # Empty object to avoid frontend breaking
             })
 
             # Start CIBA polling in background so phone approval also resolves the event

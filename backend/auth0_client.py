@@ -118,35 +118,19 @@ class Auth0Client:
                 "error": str(e)
             }
 
-    async def initiate_ciba_with_rar(self, user_id: str, topic: str, proposed_response: str, binding_message: str) -> dict:
+    async def initiate_ciba_standard(self, login_hint: str, topic: str, proposed_response: str) -> dict:
         """
-        CIBA with Rich Authorization Requests (RAR).
-        - login_hint uses iss_sub JSON format required by Auth0
-        - request parameter removed (not supported on standard plans)
-        - authorization_details carries the RAR payload
+        CIBA standard flow without Rich Authorization Requests (RAR).
+        Context is passed via binding_message.
         """
-        short_binding = f"ProxyMe:{topic[:12]}"
-
-        authorization_details = json.dumps([{
-            "type": "proxy_me_approval",
-            "topic": topic,
-            "proposed_response": proposed_response[:80],
-            "action": "speak_on_behalf"
-        }])
-
-        login_hint = json.dumps({
-            "format": "iss_sub",
-            "iss": f"https://{self.domain}/",
-            "sub": user_id
-        })
-
+        display_message = f"ProxyMe: Approve '{topic}'? | Msg: {proposed_response[:50]}..."
+        
         if not self.domain or not self.client_id:
             return {
                 "auth_req_id": f"demo_ciba_{os.urandom(6).hex()}",
                 "expires_in": 300,
                 "interval": 5,
                 "demo_mode": True,
-                "rar_details": {"topic": topic, "proposed_response": proposed_response[:100]}
             }
 
         try:
@@ -157,29 +141,24 @@ class Auth0Client:
                         "client_id": self.client_id,
                         "client_secret": self.client_secret,
                         "login_hint": login_hint,
-                        "scope": "openid",
+                        "scope": "openid profile email", # Standard scopes
                         "audience": self.audience,
-                        "binding_message": short_binding,
-                        "authorization_details": authorization_details,
+                        "binding_message": display_message, # This shows on your phone
                     },
                     timeout=15
                 )
+                
                 if response.status_code == 200:
                     data = response.json()
-                    return {
-                        "auth_req_id": data.get("auth_req_id"),
-                        "expires_in": data.get("expires_in", 300),
-                        "interval": data.get("interval", 5),
-                        "demo_mode": False,
-                        "rar_details": {"topic": topic, "proposed_response": proposed_response[:100]}
-                    }
+                    data["demo_mode"] = False
+                    return data
+                
                 return {
                     "auth_req_id": f"demo_ciba_{os.urandom(6).hex()}",
                     "expires_in": 300,
                     "interval": 5,
                     "demo_mode": True,
                     "error": response.text,
-                    "rar_details": {"topic": topic, "proposed_response": proposed_response[:100]}
                 }
         except Exception as e:
             return {
@@ -188,7 +167,6 @@ class Auth0Client:
                 "interval": 5,
                 "demo_mode": True,
                 "error": str(e),
-                "rar_details": {"topic": topic, "proposed_response": proposed_response[:100]}
             }
 
     async def poll_ciba(self, auth_req_id: str) -> dict:
