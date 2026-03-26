@@ -333,7 +333,11 @@ function connectWS() {
       btn.classList.remove('active');
     }
   };
-  ws.onclose = () => { setStatus('','proxy: disconnected'); setTimeout(connectWS,3000); };
+  ws.onclose = () => {
+    setStatus('', 'proxy: reconnecting...');
+    setTimeout(connectWS, 2000);
+  };
+  ws.onerror = () => { /* handled via onclose */ };
   ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
 }
 
@@ -509,54 +513,78 @@ function startListening() {
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = 'en-US';
-  
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    setStatus('listening', 'proxy: listening');
-  }
+  recognition.maxAlternatives = 1;
+
   let finalBuffer = '', debounce = null;
-  recognition.onresult = (e) => {
-    let interim='', final='';
-    for (let i=e.resultIndex; i<e.results.length; i++) {
-      if (e.results[i].isFinal) final+=e.results[i][0].transcript;
-      else interim+=e.results[i][0].transcript;
+
+  function flush() {
+    const text = finalBuffer.trim();
+    finalBuffer = '';
+    if (text.length > 5 && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'transcript', text }));
+      setStatus('processing', 'proxy: processing...');
     }
+  }
+
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+
     const box = document.getElementById('transcript-box');
     box.classList.add('active');
-    box.textContent = (finalBuffer+final+interim).slice(-200);
+    box.textContent = (finalBuffer + final + interim).slice(-300);
+
     if (final) {
-      finalBuffer+=final;
+      finalBuffer += final;
       clearTimeout(debounce);
-      debounce=setTimeout(()=>{
-        if (finalBuffer.trim().length>8 && ws && ws.readyState===WebSocket.OPEN) {
-          ws.send(JSON.stringify({type:'transcript', text:finalBuffer.trim()}));
-          setStatus('processing','proxy: processing...');
-          finalBuffer='';
-        }
-      }, 1200);
+
+      // If buffer is getting very long, flush immediately after a natural break
+      if (finalBuffer.length > 500) {
+        flush();
+        return;
+      }
+
+      // Otherwise wait 2.5s of silence before sending
+      debounce = setTimeout(flush, 2500);
     }
   };
+
   recognition.onstart = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       setStatus('listening', 'proxy: listening');
+    } else {
+      setStatus('', 'proxy: connecting...');
     }
   };
+
   recognition.onerror = (event) => {
+    // 'no-speech' just means silence — don't show an error
     if (event.error === 'no-speech') return;
+    // 'aborted' happens on stop() — ignore it
+    if (event.error === 'aborted') return;
     setStatus('', `proxy: mic error (${event.error})`);
   };
-  recognition.onend = () => { if(isListening) recognition.start(); };
+
+  recognition.onend = () => {
+    // Flush any remaining buffer when recognition ends naturally
+    if (finalBuffer.trim().length > 5) flush();
+    if (isListening) recognition.start();
+  };
+
   recognition.start();
 }
 
 function stopListening() {
-  if (recognition) recognition.stop();
-  if (ws) ws.close();
-  isListening=false;
-  setStatus('','proxy: idle');
-  const box=document.getElementById('transcript-box');
+  if (recognition) { recognition.stop(); recognition = null; }
+  isListening = false;
+  setStatus('', 'proxy: idle');
+  const box = document.getElementById('transcript-box');
   box.classList.remove('active');
-  box.textContent='Waiting for audio...';
-  document.getElementById('toggle-btn').textContent='START';
+  box.textContent = 'Waiting for audio...';
+  document.getElementById('toggle-btn').textContent = 'START';
   document.getElementById('toggle-btn').classList.remove('active');
 }
 </script>
