@@ -2,7 +2,7 @@
 
 An AI meeting assistant that whispers responses in your ear and always asks before doing anything sensitive.
 
-Built for the **Authorized to Act: Auth0 for AI Agents** hackathon using Auth0 Token Vault, CIBA with Rich Authorization Requests, and Fine Grained Authorization.
+Built for the **Authorized to Act: Auth0 for AI Agents** hackathon using Auth0 Token Vault, CIBA with binding_message, and Fine Grained Authorization.
 
 ---
 
@@ -18,7 +18,7 @@ sequenceDiagram
     participant FGA as FGA Role Check
     participant CA as Groq Agent
     participant TV2 as Token Vault (generate scope)
-    participant CIBA as Auth0 CIBA + RAR
+    participant CIBA as Auth0 CIBA
     participant G as Guardian Push (Phone)
 
     M->>O: Speech transcript chunk
@@ -48,8 +48,8 @@ sequenceDiagram
     else Topic is out of scope
         PE-->>WS: {allowed: false, topic, reason, layer: "fga"}
         WS->>CA: generate_response — preview only
-        WS->>CIBA: POST /bc-authorize with RAR payload
-        Note over CIBA,G: RAR includes full proposed response
+        WS->>CIBA: POST /bc-authorize with binding_message
+        Note over CIBA,G: binding_message shows topic + preview
         CIBA->>G: Guardian push notification to phone
         WS-->>O: Purple approval card with elapsed timer
 
@@ -79,7 +79,7 @@ Proxy Me sits as a floating overlay beside your meeting window. It listens to th
 
 Auto-responds to topics within your authorized scope based on FGA role, category toggles, and natural language rules.
 
-Fires a CIBA step-up request for anything outside scope. The RAR payload shows the full proposed response in the Guardian notification so you know exactly what you are approving.
+Fires a CIBA step-up request for anything outside scope — the push notification shows the topic and a preview of the proposed response.
 
 Logs every decision to a shareable audit trail with conversation analytics (insights, risks, opportunities, decisions extracted from each transcript chunk).
 
@@ -106,8 +106,7 @@ Demo mode toggle lets you auto-approve CIBA requests for testing and presentatio
 | Feature | How it is used |
 |---------|----------------|
 | Token Vault | Per-action scoped tokens. classify_transcript gets read:transcripts. generate_response gets write:suggestions. Each token is single-purpose and short-lived. |
-| CIBA | Step-up approval for out-of-scope topics. POST /bc-authorize with polling and Guardian push notifications. |
-| RAR | Rich Authorization Requests send the full proposed response via authorization_details. The Guardian notification shows exactly what the AI wants to say before you approve. |
+| CIBA | Step-up approval for out-of-scope topics. POST /bc-authorize with a binding_message that includes topic + preview. Guardian push notification shows the context. |
 | FGA | Role-based topic permissions. Sales Engineer auto-approves pricing and technical. Junior AE gets general conversation only. Executive gets everything. |
 | Flow Ticker | Every Token Vault fetch, FGA check, and CIBA initiation streams to the overlay in real time. The authorization layer is visible during live sessions. |
 
@@ -168,7 +167,7 @@ proxyme/
 │   ├── main.py              # FastAPI, WebSocket, audit log, per-action tokens
 │   ├── groq_agent.py        # AsyncGroq response generation + topic change handling
 │   ├── permission_engine.py # 3-layer check: custom rules → FGA → category toggles
-│   ├── auth0_client.py      # Token Vault, CIBA+RAR, FGA roles
+│   ├── auth0_client.py      # Token Vault, CIBA, FGA roles
 │   └── models.py            # Pydantic models
 ├── frontend/templates/
 │   ├── index.html           # Setup: role selector, confidence slider
@@ -245,13 +244,13 @@ My first version used four scopes: read:transcripts, classify:topics, write:sugg
 
 What I took from this is that scope granularity and real time UX pull in opposite directions. You want one token per atomic action for security. You want zero added latency for usability. In a meeting context, two scopes per chunk is roughly the ceiling before it starts feeling broken. Beyond that you need to either batch the fetches or accept that your product stops working in the environment it was built for.
 
-**Where CIBA and RAR actually got difficult**
+**Where CIBA actually got difficult**
 
-I was most excited about the CIBA flow and also most surprised by where it broke. The basic idea works: detect a sensitive topic, call /bc-authorize with a Rich Authorization Request payload, send a Guardian push to the user's phone, wait for approval, release the response. Cryptographically clean, genuinely out of band.
+I was most excited about the CIBA flow and also most surprised by where it broke. The basic idea works: detect a sensitive topic, call /bc-authorize with a binding_message, send a Guardian push to the user's phone, wait for approval, release the response. Cryptographically clean, genuinely out of band.
 
-The first problem was the authorization_details character limit. Auth0 does not document this clearly. I was passing the full proposed response text as part of the RAR payload, sometimes 200 characters or more, along with topic metadata. On longer responses, /bc-authorize returned 200 but the Guardian notification came through truncated. The user would see something like "AI wants to say: 'Our enterprise pricing is customi...'" with no way to see the rest. That is not a meaningful approval.
+The first problem was the binding_message character limit. Auth0 limits this to 64 characters. I was passing longer context that got truncated. The user would see something like "Proxy Me: pricing: Our enterprise pricing is customi..." with no way to see the rest. That is not a meaningful approval.
 
-I capped the RAR payload at 80 characters and showed the complete proposed response in the overlay card instead. The Guardian notification becomes the authorization trigger rather than the full context. It works, but it is a tradeoff I did not want to make.
+I capped the binding_message at 64 characters (format: "Proxy Me: {topic}: {preview}") and showed the complete proposed response in the overlay card instead. The Guardian notification becomes the authorization trigger rather than the full context. It works within the constraint.
 
 The second problem was task management inside the WebSocket handler. My first version awaited the CIBA result synchronously, which blocked the entire handler while waiting for a phone approval that might take 20 seconds. New transcript chunks piled up unprocessed. Switching to asyncio.create_task() for every incoming transcript fixed it. Each chunk processes independently and approvals resolve in their own task. Auth0's CIBA documentation assumes HTTP request response flows, so this pattern is not covered anywhere I could find.
 
