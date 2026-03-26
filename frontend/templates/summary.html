@@ -291,23 +291,66 @@
     .page-header { flex-direction: column; gap: 16px; }
   }
 
-  /* Print Stylesheet Overrides */
+  /* Print Stylesheet Overrides - Clean, ink-efficient white layout */
   @media print {
     html, body {
-      background: #000000 !important; background-color: #000000 !important; color: #ffffff !important;
-      -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+      background: #ffffff !important;
+      color: #111111 !important;
+      font-size: 12px !important;
     }
     body::before, body::after { display: none !important; }
-    * { animation: none !important; backdrop-filter: none !important; opacity: 1 !important; transform: none !important; }
-    .btn-export { display: none !important; }
-    .container { padding: 40px !important; max-width: 100% !important; }
-    .stat-card, .summary-box, .topic-card, .trail-table-wrapper, #trail-table th, #trail-table td {
-      background-color: #111111 !important; border: 1px solid #222222 !important; box-shadow: none !important;
-      page-break-inside: avoid; color: #ffffff !important;
+    * {
+      animation: none !important;
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      transform: none !important;
     }
-    .topic-card-fill { background-color: #8B5CF6 !important; }
-    h1, .stat-number, .stat-label, .section-label, .topic-card-name, .td-text, .status-badge { color: #ffffff !important; }
-    h1 { font-size: 48px !important; }
+    .btn-export { display: none !important; }
+    .container { padding: 24px !important; max-width: 100% !important; }
+
+    /* Heading */
+    h1 { font-size: 28px !important; color: #111111 !important; }
+    .wordmark, .session-meta { color: #555555 !important; }
+
+    /* Cards and panels: light backgrounds, simple borders */
+    .stat-card, .summary-box, .topic-card, .trail-table-wrapper {
+      background: #f8f8f8 !important;
+      border: 1px solid #dddddd !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    /* Text colors */
+    .stat-number, .stat-label, .section-label, .topic-card-name,
+    .td-text, #summary-text, .trail-table th, .trail-table td,
+    .history-text, .confidence-label { color: #111111 !important; }
+
+    .stat-number.green { color: #059669 !important; }
+    .stat-number.amber { color: #b45309 !important; }
+    .stat-number.red   { color: #dc2626 !important; }
+    .stat-number.purple { color: #111111 !important; }
+
+    .section-label { color: #555555 !important; border-color: #cccccc !important; }
+
+    /* Table */
+    .trail-table th, .trail-table td {
+      border-bottom: 1px solid #eeeeee !important;
+    }
+    .trail-table tr:last-child td { border-bottom: none !important; }
+
+    /* Status badges */
+    .status-badge.approve { background: #d1fae5 !important; color: #065f46 !important; border-color: #6ee7b7 !important; }
+    .status-badge.deny    { background: #f3f4f6 !important; color: #374151 !important; border-color: #d1d5db !important; }
+    .status-badge.use     { background: #ede9fe !important; color: #5b21b6 !important; border-color: #c4b5fd !important; }
+    .status-badge.timeout { background: #fef3c7 !important; color: #92400e !important; border-color: #fcd34d !important; }
+
+    .topic-pill { background: #f3f4f6 !important; color: #374151 !important; border-color: #d1d5db !important; }
+    .topic-card-fill { background: #8B5CF6 !important; }
+
+    /* Keep content sections together */
+    .section { page-break-inside: avoid !important; break-inside: avoid !important; }
+    .stats-row { page-break-inside: avoid !important; break-inside: avoid !important; }
   }
 </style>
 </head>

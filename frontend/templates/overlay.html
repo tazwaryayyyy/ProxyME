@@ -19,7 +19,7 @@
     --glow: rgba(139,92,246,0.25);
     --blur: blur(20px);
   }
-  html,body { background:transparent; font-family:'Geist Sans',sans-serif; color:var(--text); font-weight:300; height:100%; overflow:hidden; }
+  html,body { background:#0a0a0f; font-family:'Geist Sans',sans-serif; color:var(--text); font-weight:300; height:100%; overflow:hidden; }
 
   #overlay {
     position:fixed; right:24px; top:24px; width:calc(100vw - 48px); max-width:380px;
@@ -255,7 +255,6 @@
   <div id="consent-banner">
     <div class="dot"></div>
     <span>proxy: active</span>
-    <button onclick="document.getElementById('consent-banner').remove()">×</button>
   </div>
 
   <div id="header">
@@ -536,8 +535,16 @@ function startListening() {
       }, 1200);
     }
   };
-  recognition.onerror = ()=>setStatus('','proxy: mic error');
-  recognition.onend = ()=>{ if(isListening) recognition.start(); };
+  recognition.onstart = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      setStatus('listening', 'proxy: listening');
+    }
+  };
+  recognition.onerror = (event) => {
+    if (event.error === 'no-speech') return;
+    setStatus('', `proxy: mic error (${event.error})`);
+  };
+  recognition.onend = () => { if(isListening) recognition.start(); };
   recognition.start();
 }
 
