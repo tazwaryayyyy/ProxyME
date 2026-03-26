@@ -280,6 +280,23 @@ let ws = null, isListening = false, recognition = null;
 const decisionLog = [];
 const cibaTimers = {};
 let tickerTimeout = null;
+// Track rendered card IDs to prevent duplicates on WS reconnect
+const renderedApprovals = new Set();
+const renderedSuggestions = new Set();
+
+// --- WS keepalive so connection survives window minimize ---
+let keepaliveInterval = null;
+function startKeepalive() {
+  stopKeepalive();
+  keepaliveInterval = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'ping' })); } catch(e) {}
+    }
+  }, 25000);
+}
+function stopKeepalive() {
+  if (keepaliveInterval) { clearInterval(keepaliveInterval); keepaliveInterval = null; }
+}
 
 function addTicker(text) {
   const ticker = document.getElementById('flow-ticker');
@@ -289,7 +306,6 @@ function addTicker(text) {
   item.textContent = text;
   ticker.appendChild(item);
   while(ticker.children.length > 3) ticker.firstChild.remove();
-  
   clearTimeout(tickerTimeout);
   tickerTimeout = setTimeout(() => {
     ticker.innerHTML = '';
@@ -298,22 +314,32 @@ function addTicker(text) {
 }
 
 window.addEventListener('load', () => {
-  if (SESSION_ID && SESSION_ID !== 'demo') {
-    connectWS();
-  }
+  if (SESSION_ID && SESSION_ID !== 'demo') connectWS();
 });
 
 function setStatus(state, text) {
   document.getElementById('status-dot').className = state;
   document.getElementById('status-text').textContent = text;
-  document.querySelectorAll('.wave-bar').forEach(b => b.classList.toggle('active', state==='listening'));
+  document.querySelectorAll('.wave-bar').forEach(b => b.classList.toggle('active', state === 'listening'));
+}
+
+// Single source of truth for listening state - avoids double flip
+function setListeningState(listening) {
+  isListening = listening;
+  const btn = document.getElementById('toggle-btn');
+  if (listening) {
+    startListening();
+    btn.textContent = 'STOP';
+    btn.classList.add('active');
+  } else {
+    stopListening();
+    btn.textContent = 'START';
+    btn.classList.remove('active');
+  }
 }
 
 function toggleListening() {
-  const btn = document.getElementById('toggle-btn');
-  if (isListening) { stopListening(); btn.textContent='START'; btn.classList.remove('active'); }
-  else { startListening(); btn.textContent='STOP'; btn.classList.add('active'); }
-  isListening = !isListening;
+  setListeningState(!isListening);
 }
 
 function connectWS() {
@@ -321,49 +347,48 @@ function connectWS() {
   const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${SESSION_ID}`);
   ws.onopen = () => {
+    startKeepalive();
     if (isListening) {
       setStatus('listening', 'proxy: listening');
-      const btn = document.getElementById('toggle-btn');
-      btn.textContent = 'STOP';
-      btn.classList.add('active');
+      document.getElementById('toggle-btn').textContent = 'STOP';
+      document.getElementById('toggle-btn').classList.add('active');
     } else {
       setStatus('', 'proxy: connected (paused)');
-      const btn = document.getElementById('toggle-btn');
-      btn.textContent = 'START';
-      btn.classList.remove('active');
+      document.getElementById('toggle-btn').textContent = 'START';
+      document.getElementById('toggle-btn').classList.remove('active');
     }
   };
   ws.onclose = () => {
+    stopKeepalive();
     setStatus('', 'proxy: reconnecting...');
     setTimeout(connectWS, 2000);
   };
   ws.onerror = () => { /* handled via onclose */ };
-  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+  ws.onmessage = (e) => {
+    try { handleMessage(JSON.parse(e.data)); } catch(err) {}
+  };
 }
 
 function handleMessage(msg) {
+  if (msg.type === 'pong' || msg.type === 'ping') return;
   if (msg.type === 'flow_ticker') { addTicker(msg.message); }
-  else if (msg.type==='suggestion') { setStatus('listening','proxy: suggestion ready'); showSuggestion(msg); }
-  else if (msg.type==='approval_required') { setStatus('approval','proxy: approval needed'); showApproval(msg); }
-  else if (msg.type==='denied') { 
-      addHistory({type:'deny',text:msg.message || 'Handled manually',topic:'—',time:now()}); 
-      setStatus('listening','proxy: listening'); 
-      const card = document.querySelector(`[data-approval-id="${msg.approval_id}"]`);
-      if (card) {
-          clearInterval(cibaTimers[msg.approval_id]);
-          dismiss(card);
-      }
-      document.getElementById('overlay').classList.remove('needs-approval');
+  else if (msg.type === 'suggestion') { setStatus('listening','proxy: suggestion ready'); showSuggestion(msg); }
+  else if (msg.type === 'approval_required') { setStatus('approval','proxy: approval needed'); showApproval(msg); }
+  else if (msg.type === 'denied') {
+    addHistory({type:'deny', text:msg.message||'Handled manually', topic:'—', time:now()});
+    setStatus('listening','proxy: listening');
+    const card = document.querySelector(`[data-approval-id="${msg.approval_id}"]`);
+    if (card) { clearInterval(cibaTimers[msg.approval_id]); dismiss(card); }
+    renderedApprovals.delete(msg.approval_id);
+    document.getElementById('overlay').classList.remove('needs-approval');
   }
-  else if (msg.type==='timeout') { 
-      addHistory({type:'timeout',text:msg.message || 'Approval timed out',topic:'—',time:now()}); 
-      setStatus('listening','proxy: listening'); 
-      const card = document.querySelector(`[data-approval-id="${msg.approval_id}"]`);
-      if (card) {
-          clearInterval(cibaTimers[msg.approval_id]);
-          dismiss(card);
-      }
-      document.getElementById('overlay').classList.remove('needs-approval');
+  else if (msg.type === 'timeout') {
+    addHistory({type:'timeout', text:msg.message||'Approval timed out', topic:'—', time:now()});
+    setStatus('listening','proxy: listening');
+    const card = document.querySelector(`[data-approval-id="${msg.approval_id}"]`);
+    if (card) { clearInterval(cibaTimers[msg.approval_id]); dismiss(card); }
+    renderedApprovals.delete(msg.approval_id);
+    document.getElementById('overlay').classList.remove('needs-approval');
   }
 }
 
@@ -378,60 +403,118 @@ function buildReasoningPills(msg) {
 }
 
 function showSuggestion(msg) {
+  // Deduplicate — same suggestion can come twice after reconnect
+  const key = msg.suggestion_id || msg.text || '';
+  if (renderedSuggestions.has(key)) return;
+  renderedSuggestions.add(key);
+
   const card = document.createElement('div');
   card.className = 'suggestion-card';
-  const safeText = (msg.text||'').replace(/`/g,'\\`');
-  card.innerHTML = `
-    <div class="card-label green">auto-approved · ${msg.topic||'general'}</div>
-    <div class="card-text">${msg.text||''}</div>
-    ${buildReasoningPills(msg)}
-    <div class="card-actions">
-      <button class="btn-use" onclick="useResponse(this,\`${safeText}\`,'${msg.topic||'general'}')">use this</button>
-      <button class="btn-dismiss" onclick="dismiss(this.closest('.suggestion-card'))">dismiss</button>
-    </div>
-  `;
+
+  // Use textContent to safely set text — avoids innerHTML quote-breaking issues
+  const labelEl = document.createElement('div');
+  labelEl.className = 'card-label green';
+  labelEl.textContent = `auto-approved · ${msg.topic||'general'}`;
+
+  const textEl = document.createElement('div');
+  textEl.className = 'card-text';
+  textEl.textContent = msg.text || '';
+
+  const pillsWrapper = document.createElement('div');
+  pillsWrapper.innerHTML = buildReasoningPills(msg);
+
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+
+  const useBtn = document.createElement('button');
+  useBtn.className = 'btn-use';
+  useBtn.textContent = 'use this';
+  useBtn.addEventListener('click', () => useResponse(useBtn, msg.text || '', msg.topic || 'general'));
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.className = 'btn-dismiss';
+  dismissBtn.textContent = 'dismiss';
+  dismissBtn.addEventListener('click', () => { renderedSuggestions.delete(key); dismiss(card); });
+
+  actions.append(useBtn, dismissBtn);
+  card.append(labelEl, textEl, pillsWrapper, actions);
   document.getElementById('cards').prepend(card);
-  setTimeout(()=>{ if(card.parentNode) dismiss(card); }, 20000);
+
+  // Auto-dismiss after 20s
+  setTimeout(() => { if (card.parentNode) { renderedSuggestions.delete(key); dismiss(card); } }, 20000);
 }
 
 function showApproval(msg) {
+  // Deduplicate — same approval can come twice after WS reconnect
+  if (renderedApprovals.has(msg.approval_id)) return;
+  renderedApprovals.add(msg.approval_id);
+
   const card = document.createElement('div');
   card.className = 'approval-card';
   card.dataset.approvalId = msg.approval_id;
 
   const isGuardian = msg.ciba_mode === 'guardian';
   const modeLabel = isGuardian ? 'GUARDIAN PUSH' : 'OVERLAY';
-  const waitingHtml = `
-    <div class="ciba-waiting" id="ciba-wait-${msg.approval_id}">
-      <div class="ciba-spinner"></div>
-      <div class="ciba-waiting-text">
-        <div class="ciba-title">${isGuardian ? 'Waiting for Guardian approval on your phone...' : 'Waiting for your approval...'}</div>
-        <div class="ciba-elapsed" id="elapsed-${msg.approval_id}">0s elapsed</div>
-      </div>
-      <span class="ciba-mode-badge">${modeLabel}</span>
+
+  // Label
+  const labelEl = document.createElement('div');
+  labelEl.className = 'card-label red-warn';
+  labelEl.textContent = `approval required · ${msg.topic||'sensitive'}`;
+
+  // Reason
+  const reasonEl = document.createElement('div');
+  reasonEl.className = 'card-reason';
+  reasonEl.textContent = (msg.reason||'potential commitment detected').toLowerCase();
+
+  // Question
+  const questionEl = document.createElement('div');
+  questionEl.className = 'card-question';
+  questionEl.textContent = `"${msg.question||''}"`;
+
+  // Preview
+  const previewEl = document.createElement('div');
+  previewEl.className = 'card-preview';
+  previewEl.textContent = msg.suggested_response || '';
+
+  // Pills
+  const pillsWrapper = document.createElement('div');
+  pillsWrapper.innerHTML = buildReasoningPills(msg);
+
+  // CIBA waiting
+  const cibaWait = document.createElement('div');
+  cibaWait.className = 'ciba-waiting';
+  cibaWait.id = `ciba-wait-${msg.approval_id}`;
+  cibaWait.innerHTML = `
+    <div class="ciba-spinner"></div>
+    <div class="ciba-waiting-text">
+      <div class="ciba-title">${isGuardian ? 'Waiting for Guardian approval on your phone...' : 'Waiting for your approval...'}</div>
+      <div class="ciba-elapsed" id="elapsed-${msg.approval_id}">0s elapsed</div>
     </div>
+    <span class="ciba-mode-badge">${modeLabel}</span>
   `;
 
-  const safePrev = (msg.suggested_response||'').replace(/`/g,'\\`');
-  const reasonText = (msg.reason||'potential commitment detected').toLowerCase();
-  card.innerHTML = `
-    <div class="card-label red-warn">approval required · ${msg.topic||'sensitive'}</div>
-    <div class="card-reason">${reasonText}</div>
-    <div class="card-question">"${msg.question||''}"</div>
-    <div class="card-preview">${msg.suggested_response||''}</div>
-    ${buildReasoningPills(msg)}
-    ${waitingHtml}
-    <div class="card-actions">
-      <button class="btn-approve" onclick="respond('${msg.approval_id}',true,this,'${msg.topic||'sensitive'}',\`${safePrev}\`)">approve & use</button>
-      <button class="btn-deny" onclick="respond('${msg.approval_id}',false,this,'${msg.topic||'sensitive'}','')">i'll handle it</button>
-    </div>
-  `;
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+
+  const approveBtn = document.createElement('button');
+  approveBtn.className = 'btn-approve';
+  approveBtn.textContent = 'approve & use';
+  approveBtn.addEventListener('click', () => respond(msg.approval_id, true, card, msg.topic||'sensitive', msg.suggested_response||''));
+
+  const denyBtn = document.createElement('button');
+  denyBtn.className = 'btn-deny';
+  denyBtn.textContent = "i'll handle it";
+  denyBtn.addEventListener('click', () => respond(msg.approval_id, false, card, msg.topic||'sensitive', ''));
+
+  actions.append(approveBtn, denyBtn);
+  card.append(labelEl, reasonEl, questionEl, previewEl, pillsWrapper, cibaWait, actions);
   document.getElementById('cards').prepend(card);
   document.getElementById('overlay').classList.add('needs-approval');
 
-  // Start elapsed timer
+  // Elapsed timer
   const start = Date.now();
-  cibaTimers[msg.approval_id] = setInterval(()=>{
+  cibaTimers[msg.approval_id] = setInterval(() => {
     const el = document.getElementById(`elapsed-${msg.approval_id}`);
     if (el) {
       const secs = Math.floor((Date.now()-start)/1000);
@@ -443,59 +526,61 @@ function showApproval(msg) {
   }, 1000);
 }
 
-function respond(approvalId, approved, btn, topic, text) {
+function respond(approvalId, approved, card, topic, text) {
   clearInterval(cibaTimers[approvalId]);
-  const card = btn.closest('.approval-card');
-  if (ws && ws.readyState===WebSocket.OPEN) {
-    ws.send(JSON.stringify({type:'approval_response', approval_id:approvalId, approved}));
+  renderedApprovals.delete(approvalId);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'approval_response', approval_id: approvalId, approved }));
   }
   addHistory({
-    type: approved?'approve':'deny',
+    type: approved ? 'approve' : 'deny',
     text: approved ? `Approved: "${text.slice(0,55)}..."` : 'Handled manually',
     topic, time: now()
   });
   document.getElementById('overlay').classList.remove('needs-approval');
   dismiss(card);
-  setStatus('listening','PROXY ME — listening');
+  if (isListening) setStatus('listening', 'proxy: listening');
 }
 
 function useResponse(btn, text, topic) {
-  navigator.clipboard.writeText(text).catch(()=>{});
+  navigator.clipboard.writeText(text).catch(() => {});
   btn.textContent = 'copied!';
   btn.style.background = 'rgba(52,211,153,0.25)';
-  addHistory({type:'use', text:`Used: "${text.slice(0,55)}..."`, topic, time:now()});
-  setTimeout(()=>dismiss(btn.closest('.suggestion-card')), 1200);
+  addHistory({ type: 'use', text: `Used: "${text.slice(0,55)}..."`, topic, time: now() });
+  setTimeout(() => dismiss(btn.closest('.suggestion-card')), 1200);
 }
 
 function dismiss(card) {
-  if (!card) return;
+  if (!card || !card.parentNode) return;
   card.classList.add('removing');
-  setTimeout(()=>card.remove(), 200);
+  setTimeout(() => card.remove(), 250);
 }
 
 function now() {
-  return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  return new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
 
 function addHistory(entry) {
   decisionLog.push(entry);
   const history = document.getElementById('history');
-  const icons = {approve:'✓', deny:'—', use:'↗', timeout:'⏱', auto:'·'};
+  const icons = { approve:'✓', deny:'—', use:'↗', timeout:'⏱', auto:'·' };
   const item = document.createElement('div');
   item.className = 'history-item';
-  item.innerHTML = `
-    <span class="history-icon">${icons[entry.type]||'·'}</span>
-    <div class="history-body">
-      <div class="history-text">${entry.text}</div>
-      <div class="history-pills">
-        <span class="h-pill ${entry.type==='approve'?'approved':entry.type==='deny'?'denied':'auto'}">${entry.type}</span>
-        <span class="h-pill">topic: ${entry.topic}</span>
-        <span class="h-pill">${entry.time}</span>
-      </div>
-    </div>
-  `;
+  const iconEl = document.createElement('span');
+  iconEl.className = 'history-icon';
+  iconEl.textContent = icons[entry.type] || '·';
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'history-body';
+  bodyEl.innerHTML = `
+    <div class="history-text">${entry.text}</div>
+    <div class="history-pills">
+      <span class="h-pill ${entry.type==='approve'?'approved':entry.type==='deny'?'denied':'auto'}">${entry.type}</span>
+      <span class="h-pill">topic: ${entry.topic}</span>
+      <span class="h-pill">${entry.time}</span>
+    </div>`;
+  item.append(iconEl, bodyEl);
   history.prepend(item);
-  while(history.children.length>10) history.lastChild.remove();
+  while (history.children.length > 10) history.lastChild.remove();
 }
 
 function endMeeting() {
